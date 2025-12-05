@@ -1,30 +1,45 @@
-import streamlit as st
+ import streamlit as st
 import pandas as pd
 import numpy as np
 
 # ---- APP CONFIG ----
 st.set_page_config(page_title="NHL SOG Edge Finder", layout="wide")
-st.title("🏒 NHL SOG Edge Finder — Upload CSV")
+st.title("🏒 NHL SOG Edge Finder — Upload CSV or Excel")
 
 st.markdown("""
-Upload your **Natural Stat Trick CSV** (Player Season Totals).  
-The app will calculate top SOG players for tonight.
+Upload your **Natural Stat Trick player totals** file.  
+The app calculates top SOG players for tonight.
 """)
 
 # ---- 1. FILE UPLOAD ----
-uploaded_file = st.file_uploader("Upload CSV", type=["csv"])
+uploaded_file = st.file_uploader(
+    "Upload CSV or Excel", type=["csv", "xlsx"]
+)
 
 if uploaded_file is None:
-    st.warning("Please upload a CSV file to continue.")
+    st.warning("Please upload a CSV or Excel file to continue.")
     st.stop()
 
-# ---- 2. READ CSV WITH ENCODING FIX ----
-try:
-    df = pd.read_csv(uploaded_file, encoding='latin1')
-except UnicodeDecodeError:
-    df = pd.read_csv(uploaded_file, encoding='ISO-8859-1')
+# ---- 2. READ FILE WITH ENCODING FIX ----
+file_type = uploaded_file.name.split(".")[-1].lower()
 
-st.success("CSV loaded successfully!")
+try:
+    if file_type == "csv":
+        try:
+            df = pd.read_csv(uploaded_file, encoding='latin1')
+        except UnicodeDecodeError:
+            df = pd.read_csv(uploaded_file, encoding='ISO-8859-1')
+    elif file_type in ["xls", "xlsx"]:
+        df = pd.read_excel(uploaded_file)
+    else:
+        st.error("Unsupported file type")
+        st.stop()
+except Exception as e:
+    st.error(f"Failed to read file: {e}")
+    st.stop()
+
+st.success("File loaded successfully!")
+st.write("Columns detected:", df.columns.tolist())
 
 # ---- 3. CLEANUP & COLUMN STANDARDIZATION ----
 df.columns = [c.strip().lower().replace(" ", "_") for c in df.columns]
@@ -60,7 +75,8 @@ df["aggressiveness_index"] = (
 )
 df["individual_shot_share"] = df["shots"] / df["sf"]
 
-# ---- 5. FILTER PLAYERS ----
+# ---- 5. FILTER CONTROLS ----
+st.header("🔎 Filters")
 min_gp = st.slider("Minimum Games Played", 1, 82, 10)
 min_toi = st.slider("Minimum TOI (minutes)", 50, 1500, 150)
 min_shots_per60 = st.slider("Minimum Shots per 60", 1.0, 20.0, 6.0)
