@@ -2,25 +2,35 @@ import streamlit as st
 import pandas as pd
 
 st.set_page_config(page_title="NHL SOG Edge Finder", layout="wide")
+st.title("🏒 NHL SOG Edge Finder — Upload or Link CSV")
 
-st.title("🏒 NHL SOG Edge Finder — Upload Your CSV")
+st.markdown("""
+You can either:
+- Upload your **Natural Stat Trick CSV** from your device  
+- Or paste a **direct URL to the CSV**
+""")
 
-st.markdown("Upload your Natural Stat Trick CSV: Player Season Totals.")
+# ---- 1. CSV SOURCE SELECTION ----
+source_option = st.radio("Choose CSV source:", ("Upload from device", "Paste CSV URL"))
 
-# ---- 1. FILE UPLOAD ----
-uploaded_file = st.file_uploader("Upload CSV", type=["csv"])
-
-if uploaded_file is None:
-    st.warning("Please upload the CSV file to continue.")
-    st.stop()
-
-try:
+if source_option == "Upload from device":
+    uploaded_file = st.file_uploader("Upload CSV", type=["csv"])
+    if uploaded_file is None:
+        st.warning("Please upload a CSV file to continue.")
+        st.stop()
     df = pd.read_csv(uploaded_file)
-except Exception as e:
-    st.error(f"Failed to read CSV: {e}")
-    st.stop()
+else:
+    csv_url = st.text_input("Paste direct CSV URL here")
+    if not csv_url:
+        st.warning("Please enter a CSV URL to continue.")
+        st.stop()
+    try:
+        df = pd.read_csv(csv_url)
+    except Exception as e:
+        st.error(f"Failed to read CSV from URL: {e}")
+        st.stop()
 
-# ---- 2. BASIC CLEANUP ----
+# ---- 2. CLEANUP & COLUMN STANDARDIZATION ----
 df.columns = [c.strip().lower().replace(" ", "_") for c in df.columns]
 
 rename_map = {
@@ -42,7 +52,7 @@ rename_map = {
 
 df = df.rename(columns={k: v for k, v in rename_map.items() if k in df.columns})
 
-# ---- 3. BUILD SOG-OPTIMIZED FEATURES ----
+# ---- 3. SOG OPTIMIZATION METRICS ----
 df["shots_per60"] = df["shots"] / (df["toi"] / 60)
 df["ixg_per_shot"] = df["ixg"] / df["shots"].replace(0, pd.NA)
 df["cf_per60"] = df["cf"] / (df["toi"] / 60)
