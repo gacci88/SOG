@@ -20,19 +20,33 @@ if uploaded_file is None:
     st.warning("Please upload a CSV or Excel file to continue.")
     st.stop()
 
-# ---- 2. READ FILE WITH ENCODING FIX ----
+# ---- 2. READ FILE WITH ENCODING SAFETY ----
 file_type = uploaded_file.name.split(".")[-1].lower()
+df = None
 
 try:
     if file_type == "csv":
-        try:
-            df = pd.read_csv(uploaded_file, encoding='latin1')
-        except UnicodeDecodeError:
-            df = pd.read_csv(uploaded_file, encoding='ISO-8859-1')
+        # Try common encodings
+        for enc in ['utf-8', 'latin1', 'ISO-8859-1']:
+            try:
+                df = pd.read_csv(uploaded_file, encoding=enc)
+                break
+            except Exception:
+                continue
+        if df is None:
+            st.error("Failed to read CSV. Try opening it in Excel and saving as CSV UTF-8.")
+            st.stop()
     elif file_type in ["xls", "xlsx"]:
-        df = pd.read_excel(uploaded_file)
+        try:
+            df = pd.read_excel(uploaded_file)
+        except ImportError:
+            st.error("Missing 'openpyxl'. Add it to requirements.txt and redeploy.")
+            st.stop()
+        except Exception as e:
+            st.error(f"Failed to read Excel file: {e}")
+            st.stop()
     else:
-        st.error("Unsupported file type")
+        st.error("Unsupported file type. Upload CSV or Excel.")
         st.stop()
 except Exception as e:
     st.error(f"Failed to read file: {e}")
@@ -73,7 +87,7 @@ df["aggressiveness_index"] = (
     df["ff_per60"] * 0.30 +
     df["cf_per60"] * 0.20
 )
-df["individual_shot_share"] = df["shots"] / df["sf"]
+df["individual_shot_share"] = df["shots"] / df["sf"].replace(0, pd.NA)
 
 # ---- 5. FILTER CONTROLS ----
 st.header("🔎 Filters")
@@ -86,6 +100,10 @@ filtered = df[
     (df["toi"] >= min_toi) &
     (df["shots_per60"] >= min_shots_per60)
 ].sort_values("aggressiveness_index", ascending=False)
+
+if filtered.empty:
+    st.warning("No players passed the filters. Try lowering thresholds.")
+    st.stop()
 
 # ---- 6. DISPLAY RESULTS ----
 st.header("🔥 Top SOG Players")
