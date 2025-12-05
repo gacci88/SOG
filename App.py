@@ -1,82 +1,67 @@
-import streamlit as st
 import pandas as pd
+from io import StringIO, BytesIO
 
-st.set_page_config(page_title="NHL Advanced Stats App", layout="wide")
+# ---- 1. FILE UPLOAD ----
+# This will prompt you to upload: 
+# "Player Season Totals - Natural Stat Trick.csv"
+from google.colab import files  # If not in Colab, remove this line
+uploaded = files.upload()
 
-st.title("🏒 NHL Advanced Stats Explorer (Upload Your CSV)")
+filename = list(uploaded.keys())[0]
+df = pd.read_csv(BytesIO(uploaded[filename]))
 
-st.markdown("""
-Upload any NHL skater stats CSV (MoneyPuck, NST, custom files, etc.).
-""")
+# ---- 2. BASIC CLEANUP ----
+df.columns = [c.strip().lower().replace(" ", "_") for c in df.columns]
 
-##############################################
-# 1. CSV UPLOADER
-##############################################
+# Natural Stat Trick often uses weird symbols & spaces
+rename_map = {
+    "player": "player",
+    "team": "team",
+    "position": "pos",
+    "gp": "gp",
+    "toi": "toi",
+    "cf": "cf",
+    "ca": "ca",
+    "ff": "ff",
+    "fa": "fa",
+    "sf": "sf",
+    "sa": "sa",
+    "g": "g",
+    "ixg": "ixg",
+    "shots": "shots"
+}
 
-uploaded_file = st.file_uploader("Upload your advanced stats CSV", type=["csv"])
+df = df.rename(columns={k: v for k, v in rename_map.items() if k in df.columns})
 
-if uploaded_file is None:
-    st.warning("Please upload a CSV to continue.")
-    st.stop()
+# ---- 3. BUILD SOG-OPTIMIZED FEATURES ----
 
-try:
-    df = pd.read_csv(uploaded_file)
-    st.success("CSV loaded successfully!")
-except Exception as e:
-    st.error(f"Could not read CSV: {e}")
-    st.stop()
+# Shots per 60
+df["shots_per60"] = df["shots"] / (df["toi"] / 60)
 
-##############################################
-# 2. FILTER SIDEBAR
-##############################################
+# Individual expected goals per shot (finishing quality)
+df["ixg_per_shot"] = df["ixg"] / df["shots"].replace(0, pd.NA)
 
-# Clean column names to avoid errors
-df.columns = [c.strip() for c in df.columns]
+# Corsi contribution rate
+df["cf_per60"] = df["cf"] / (df["toi"] / 60)
 
-# Detect team and player columns automatically
-team_col = None
-player_col = None
+# Fenwick contribution rate
+df["ff_per60"] = df["ff"] / (df["toi"] / 60)
 
-possible_team_cols = ["team", "Team", "TEAM", "homeTeam", "awayTeam"]
-possible_player_cols = ["name", "player", "Player", "skater", "Name"]
-
-for col in df.columns:
-    if col in possible_team_cols:
-        team_col = col
-    if col in possible_player_cols:
-        player_col = col
-
-# Sidebar Filters
-if team_col:
-    teams = ["All Teams"] + sorted(df[team_col].dropna().unique())
-    team_choice = st.sidebar.selectbox("Select a Team", teams)
-
-    if team_choice != "All Teams":
-        df = df[df[team_col] == team_choice]
-
-if player_col:
-    players = ["All Players"] + sorted(df[player_col].dropna().unique())
-    player_choice = st.sidebar.selectbox("Select a Player", players)
-
-    if player_choice != "All Players":
-        df = df[df[player_col] == player_choice]
-
-##############################################
-# 3. DISPLAY TABLE
-##############################################
-
-st.subheader("📊 Filtered Dataset")
-st.dataframe(df, use_container_width=True)
-
-##############################################
-# 4. CSV DOWNLOAD BUTTON
-##############################################
-
-csv_output = df.to_csv(index=False).encode("utf-8")
-
-st.download_button(
-    label="⬇️ Download Filtered CSV",
-    data=csv_output,
-    file_name="filtered_stats.csv",
-    mime="text/csv"
+# Shooting aggressiveness index (custom metric)
+df["aggressiveness_index"] = (
+    df["shots_per60"] * 0.50 +
+    df["ff_per60"] * 0.30 +
+    df["cf_per60"] * 0.20
 )
+
+# Usage indicator
+df["individual_shot_share"] = df["shots"] / df["sf"]
+
+# ---- 4. FILTER FOR REAL SOG PROP TARGETS ----
+filtered = df[
+    (df["gp"] >= 10) &
+    (df["toi"] >= 150) &
+    (df["shots_per60"] >= 6.0)
+].sort_values("aggressiveness_index", ascending=False)
+
+filtered.head(20)
