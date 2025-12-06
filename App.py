@@ -2,10 +2,11 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 from io import StringIO
+import re
 
 # ---- APP CONFIG ----
 st.set_page_config(page_title="🏒 NHL SOG Edge Finder", layout="wide")
-st.title("🏒 NHL SOG Edge Finder — Upload or Paste CSV")
+st.title("🏒 NHL SOG Edge Finder — Upload or Paste CSV/Excel")
 
 st.markdown("""
 Upload your **Natural Stat Trick player totals** file, or **paste CSV/tab-delimited data** from a table.  
@@ -45,19 +46,24 @@ if uploaded_file is not None:
         else:
             st.error("Unsupported file type")
             st.stop()
-    except Exception as e:
-        st.error(f"Failed to read uploaded file: {e}")
-        st.stop()
 
 # --- Read pasted CSV/tab-delimited text ---
 elif csv_text.strip() != "":
     try:
-        # Try comma first
-        try:
-            df = pd.read_csv(StringIO(csv_text))
-        except pd.errors.ParserError:
-            # If comma fails, try tab-delimited
-            df = pd.read_csv(StringIO(csv_text), sep="\t")
+        # Clean pasted text: remove empty lines and trailing spaces
+        clean_lines = [line.strip() for line in csv_text.splitlines() if line.strip()]
+        clean_text = "\n".join(clean_lines)
+
+        # Replace multiple spaces or tabs with a single comma
+        clean_text = re.sub(r"[ \t]+", ",", clean_text)
+
+        # Read cleaned text into DataFrame
+        df = pd.read_csv(StringIO(clean_text))
+        
+        if df.empty:
+            st.error("Pasted data is empty or malformed.")
+            st.stop()
+
     except Exception as e:
         st.error(f"Failed to read pasted data: {e}")
         st.stop()
