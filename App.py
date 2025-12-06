@@ -99,17 +99,27 @@ rename_map = {
 }
 df = df.rename(columns={k: v for k, v in rename_map.items() if k in df.columns})
 
-# ---- 3. SOG METRICS ----
-df["shots_per60"] = df["shots"] / (df["toi"] / 60)
-df["ixg_per_shot"] = df["ixg"] / df["shots"].replace(0, pd.NA)
-df["cf_per60"] = df["cf"] / (df["toi"] / 60)
-df["ff_per60"] = df["ff"] / (df["toi"] / 60)
+# ---- 3. SOG METRICS WITH CLEANING ----
+numeric_cols = ["shots", "toi", "ixg", "cf", "ff", "sf"]
+
+for col in numeric_cols:
+    if col in df.columns:
+        df[col] = pd.to_numeric(df[col].astype(str).str.replace(",", "").str.strip(), errors="coerce")
+
+df[numeric_cols] = df[numeric_cols].fillna(0)
+
+df["shots_per60"] = df["shots"] / (df["toi"] / 60).replace(0, np.nan)
+df["ixg_per_shot"] = df["ixg"] / df["shots"].replace(0, np.nan)
+df["cf_per60"] = df["cf"] / (df["toi"] / 60).replace(0, np.nan)
+df["ff_per60"] = df["ff"] / (df["toi"] / 60).replace(0, np.nan)
+
 df["aggressiveness_index"] = (
     df["shots_per60"] * 0.50 +
     df["ff_per60"] * 0.30 +
     df["cf_per60"] * 0.20
 )
-df["individual_shot_share"] = df["shots"] / df["sf"].replace(0, pd.NA)
+
+df["individual_shot_share"] = df["shots"] / df["sf"].replace(0, np.nan)
 
 # ---- 4. FILTER CONTROLS ----
 st.header("🔎 Filters")
