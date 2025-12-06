@@ -8,14 +8,14 @@ st.set_page_config(page_title="🏒 NHL SOG Edge Finder", layout="wide")
 st.title("🏒 NHL SOG Edge Finder — Upload or Paste CSV")
 
 st.markdown("""
-Upload your **Natural Stat Trick player totals** file, or **paste CSV data** from a table.  
+Upload your **Natural Stat Trick player totals** file, or **paste CSV/tab-delimited data** from a table.  
 The app calculates top SOG players for tonight.
 """)
 
 # ---- 1. DATA INPUT ----
 uploaded_file = st.file_uploader("Upload CSV or Excel", type=["csv", "xlsx"])
-st.markdown("Or paste CSV data below:")
-csv_text = st.text_area("Paste your table here (CSV format)")
+st.markdown("Or paste CSV/tab-delimited data below:")
+csv_text = st.text_area("Paste your table here")
 
 df = None
 
@@ -31,7 +31,7 @@ if uploaded_file is not None:
                 except Exception:
                     continue
             if df is None:
-                st.error("Failed to read CSV. Try opening it in Excel and saving as CSV UTF-8.")
+                st.error("Failed to read CSV. Try saving as CSV UTF-8.")
                 st.stop()
         elif file_type in ["xls", "xlsx"]:
             try:
@@ -49,17 +49,22 @@ if uploaded_file is not None:
         st.error(f"Failed to read uploaded file: {e}")
         st.stop()
 
-# --- Read pasted CSV if available ---
+# --- Read pasted CSV/tab-delimited text ---
 elif csv_text.strip() != "":
     try:
-        df = pd.read_csv(StringIO(csv_text))
+        # Try comma first
+        try:
+            df = pd.read_csv(StringIO(csv_text))
+        except pd.errors.ParserError:
+            # If comma fails, try tab-delimited
+            df = pd.read_csv(StringIO(csv_text), sep="\t")
     except Exception as e:
         st.error(f"Failed to read pasted data: {e}")
         st.stop()
 
 # --- Stop if no data ---
 if df is None:
-    st.warning("Please upload a file or paste CSV data to continue.")
+    st.warning("Please upload a file or paste data to continue.")
     st.stop()
 
 st.success("Data loaded successfully!")
