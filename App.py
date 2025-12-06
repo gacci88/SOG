@@ -102,24 +102,45 @@ df = df.rename(columns={k: v for k, v in rename_map.items() if k in df.columns})
 # ---- 3. SOG METRICS WITH CLEANING ----
 numeric_cols = ["shots", "toi", "ixg", "cf", "ff", "sf"]
 
-for col in numeric_cols:
-    if col in df.columns:
-        df[col] = pd.to_numeric(df[col].astype(str).str.replace(",", "").str.strip(), errors="coerce")
+# Keep only columns that exist in the DataFrame
+existing_numeric_cols = [col for col in numeric_cols if col in df.columns]
 
-df[numeric_cols] = df[numeric_cols].fillna(0)
+for col in existing_numeric_cols:
+    df[col] = pd.to_numeric(df[col].astype(str).str.replace(",", "").str.strip(), errors="coerce")
 
-df["shots_per60"] = df["shots"] / (df["toi"] / 60).replace(0, np.nan)
-df["ixg_per_shot"] = df["ixg"] / df["shots"].replace(0, np.nan)
-df["cf_per60"] = df["cf"] / (df["toi"] / 60).replace(0, np.nan)
-df["ff_per60"] = df["ff"] / (df["toi"] / 60).replace(0, np.nan)
+df[existing_numeric_cols] = df[existing_numeric_cols].fillna(0)
+
+# Safe calculations using only existing columns
+if "shots" in df.columns and "toi" in df.columns:
+    df["shots_per60"] = df["shots"] / (df["toi"] / 60).replace(0, np.nan)
+else:
+    df["shots_per60"] = 0
+
+if "ixg" in df.columns and "shots" in df.columns:
+    df["ixg_per_shot"] = df["ixg"] / df["shots"].replace(0, np.nan)
+else:
+    df["ixg_per_shot"] = 0
+
+if "cf" in df.columns and "toi" in df.columns:
+    df["cf_per60"] = df["cf"] / (df["toi"] / 60).replace(0, np.nan)
+else:
+    df["cf_per60"] = 0
+
+if "ff" in df.columns and "toi" in df.columns:
+    df["ff_per60"] = df["ff"] / (df["toi"] / 60).replace(0, np.nan)
+else:
+    df["ff_per60"] = 0
 
 df["aggressiveness_index"] = (
-    df["shots_per60"] * 0.50 +
-    df["ff_per60"] * 0.30 +
-    df["cf_per60"] * 0.20
+    df.get("shots_per60", 0) * 0.50 +
+    df.get("ff_per60", 0) * 0.30 +
+    df.get("cf_per60", 0) * 0.20
 )
 
-df["individual_shot_share"] = df["shots"] / df["sf"].replace(0, np.nan)
+if "shots" in df.columns and "sf" in df.columns:
+    df["individual_shot_share"] = df["shots"] / df["sf"].replace(0, np.nan)
+else:
+    df["individual_shot_share"] = 0
 
 # ---- 4. FILTER CONTROLS ----
 st.header("🔎 Filters")
@@ -128,9 +149,9 @@ min_toi = st.slider("Minimum TOI (minutes)", 50, 1500, 150)
 min_shots_per60 = st.slider("Minimum Shots per 60", 1.0, 20.0, 6.0)
 
 filtered = df[
-    (df["gp"] >= min_gp) &
-    (df["toi"] >= min_toi) &
-    (df["shots_per60"] >= min_shots_per60)
+    (df.get("gp", 0) >= min_gp) &
+    (df.get("toi", 0) >= min_toi) &
+    (df.get("shots_per60", 0) >= min_shots_per60)
 ].sort_values("aggressiveness_index", ascending=False)
 
 if filtered.empty:
