@@ -46,8 +46,11 @@ if uploaded_file is not None:
         else:
             st.error("Unsupported file type")
             st.stop()
+    except Exception as e:
+        st.error(f"Error reading uploaded file: {e}")
+        st.stop()
 
-# --- Read pasted CSV/tab-delimited text ---
+# --- Read pasted CSV/tab-delimited text if no uploaded file ---
 elif csv_text.strip() != "":
     try:
         # Clean pasted text: remove empty lines and trailing spaces
@@ -59,11 +62,10 @@ elif csv_text.strip() != "":
 
         # Read cleaned text into DataFrame
         df = pd.read_csv(StringIO(clean_text))
-        
+
         if df.empty:
             st.error("Pasted data is empty or malformed.")
             st.stop()
-
     except Exception as e:
         st.error(f"Failed to read pasted data: {e}")
         st.stop()
